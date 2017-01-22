@@ -5,4 +5,4 @@ output: html_document
 
 Well, I was asked to write something about the course and all I can say is that R Markdown seems very handy for doing websites and different documents. I think it will revolutionize the way I use R, as chuncks of code and plots can be easily embeded in a reader friendly format. IPython apparrently works in a similar manner and I think that after this course I would like to extend my knowledge on that direction.
 
-Here is a link to my github repository: [IODS course](https://github.com/vege123/IODS-project)
+Here is a link to my github repository: [IODS course](https://github.com/vege123/IODS-project/index.html)
