@@ -1,7 +1,6 @@
 ---
 output:
   html_document: default
-  word_document: default
 ---
 # 2. Regression and Model Validation {.tabset .tabset-fade .tabset-pills}
 
@@ -105,18 +104,22 @@ Just to briefly repeat, the dataset consists of seven variables: gender, age, at
 
 I have already, in previous section, provided a summary of the variables, which shows numerically min, max, mean, median and quantile infromation regarding each variable. Next, I will show three graphical illustrations about the data. First, I will show an overview of the data with a ggpairs function observations grouped by gender. Then I'll make a histogram of the points variable. Finally, I am going to group the data by exam performance into three groups (as close to equal size as possible) and provide a ggpairs illustration with that grouping.
 
-```{r echo = T}
+```{r echo = T, warning = F, message= F, fig.height=7, fig.width=10}
 library(GGally)
 
 #first ggpairs 
 ggpairs(learning2014, mapping = aes(col = gender, alpha = 0.3), 
              lower = list(combo = wrap("facethist", bins = 20)))
+```
 
+```{r echo = T, warning = F}
 #drawing a histogram of points
 tbl <- table(learning2014$points) 
 f <-  factor(learning2014$points, levels = 7:33)
 barplot(table(f), xlab = "Points", ylab = "Count")
+```
 
+```{r echo = T, warning = F, fig.height=7, fig.width=10}
 #splitting the data into 3 groups based on points variable
 learning2014$pgroup <- as.numeric(cut_number(learning2014$points,3))
 learning2014$pgroup2 <- factor(learning2014$pgroup, labels = c("low", "middle", "high"))
@@ -137,7 +140,7 @@ From the two other plots we can see how the points are distributed. As an extra 
 I chose not to follow the homework instruction so strictly at this point, because the idea of manually iterating through the model selection seems pointless. One should also remember that it matters in which order one includes the variables into the model, so one should not pointlessly start experimenting with different variables. Our data is luckily low in dimensions, so using the best subset selection is a possibility. I reckoned that I would let the best subset selection do the variable selection for me; to present me with the best model with three variables (as requested in the exercise instructions). Here is how I did it:
 
 
-```{r echo = T}
+```{r echo = T, fig.height=4, fig.width=6}
 library(leaps)
 
 #let's remove those two additional variables
@@ -167,7 +170,7 @@ coef(regfit.full ,3)
 Apparrently, choosing three variables is not such a bad idea, as Cp validation metric recommends three variables to be in the ideal model. Most importantly, now we know the variables for the best three variable model: attitude, stra and age. Next we do the model fitting with those variables.
 
 
-```{r echo = T}
+```{r echo = T, fig.height=6, fig.width=9}
 lm.fit <- lm(points ~ attitude + stra + age, data=learning2014_org)
 summary(lm.fit)
 
