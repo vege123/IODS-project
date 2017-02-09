@@ -1,0 +1,222 @@
+---
+output:
+  html_document: default
+---
+# 3. Logistic Regression {.tabset .tabset-fade .tabset-pills}
+
+## Data Wrangling
+
+I started off this week's exercise with data wrangling. I read the data from [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets/STUDENT+ALCOHOL+CONSUMPTION). 
+
+
+```{r echo = T, message = F, warning = F}
+initialsetup <- function(projectWD){
+  setwd(projectWD)
+  library(magrittr)
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+}
+k <- "/Users/veikko/Desktop/datakurssi/IODS-project/data"
+initialsetup(k)
+getwd()
+
+math <- read.csv("student-mat.csv", header = T, sep = ";")
+por <- read.csv("student-por.csv", header = T, sep = ";")
+
+dim(math)
+dim(por)
+colnames(math)
+head(math)
+```
+
+
+After inspecting the data I continued by combining `mat` and `por` datasets with predetermined variables. These variables were "school", "sex", "age", "address", "famsize", "Pstatus", "Medu", "Fedu", "Mjob", "Fjob", "reason", "nursery" and "internet".
+
+```{r echo = T, message = F, warning = F}
+join_by <- c("school","sex","age","address","famsize","Pstatus","Medu",
+             "Fedu","Mjob","Fjob","reason","nursery","internet")
+
+#alternatively: math_por <- inner_join(math, por, by = join_by, suffix = c(".math", ".por"))
+math_por <- math %>%
+  left_join(por, by = join_by, suffix = c(".math", ".por")) %>%
+  drop_na()
+
+glimpse(math_por)
+
+alc <- math_por %>%
+  select(one_of(join_by))
+
+# the columns in the datasets which were not used for joining the data
+notjoined_columns <- colnames(math)[!colnames(math) %in% join_by]
+
+```
+
+Now we do the most difficult thing of the data wrangling. We select from the combined dataset variables that have same original names, but different suffixes and if those variables have numerical values we take an average of the two columns by rows with the `rowMeans`. I was trying to implement this with my own code, but it turned out to be very demanding (maybe I just did not find the right function, but if you got any ideas feel free to comment). After this procedure I created two new variables "alc_use" and "high_use". Finally, I wrote the data into a csv-file. 
+
+```{r echo = T, message = F, warning = F}
+# for every column name not used for joining... 
+# copied from Data camp as I could not get my alternative solution for this to work
+for(column_name in notjoined_columns) {
+
+  two_columns <- select(math_por, starts_with(column_name))
+
+  first_column <- select(two_columns, 1)[[1]]
+  if(is.numeric(first_column)) {
+    alc[column_name] <- round(rowMeans(two_columns))
+  } else { 
+    alc[column_name] <- first_column
+  }
+}
+
+glimpse(alc)
+
+alc <- alc %>%
+  mutate(alc_use = (Walc + Dalc)/2, high_use = alc_use > 2) 
+
+glimpse(alc)
+
+write.csv(alc, file = "alcohol_data.csv", row.names = F)
+
+```
+  
+Now as the data is looking as instructed (382 observations and 35 variables) we can move to the analysis part.
+
+## Analysis
+  
+As a brief recap our dataset consists of 35 variables and 382 observations. You can see the previous part to know more about the data set. Here I quickly illustrate how the "alc_use" variable looks like. Remember that high_use is counted as `TRUE` as alc_use is greater than 2. 
+
+  
+```{r echo = T}
+
+colnames(alc)
+dim(alc)
+
+g1 <- ggplot(data = alc, aes(x = alc_use, fill = sex))
+g1 + geom_bar()
+
+```
+  
+I chose these four as my explanatory variables:
+
+* absences: number of school absences (numeric: from 0 to 93) 
+* famrel: quality of family relationships (numeric: from 1 - very bad to 5 - excellent) 
+* health: current health status (numeric: from 1 - very bad to 5 - very good) 
+* goout: going out with friends (numeric: from 1 - very low to 5 - very high) 
+
+**Absences hypothesis**: high absence should indicate high alcohol consumption (people do not go classes drunk or hangover)
+
+**Family relations hypothesis**: bad relations (low famrel) could increase the odds of having high alcohol consumption
+
+**Health hypothesis**: low health may cause alchol consumption, but might also be an effect of it
+
+**Going out hypothesis**: alcoholism is also connected to anti-social behavior in older age, but we should expect drinking to be social act for students of this age
+
+Now let's plot the data regarding selected variables. For the sace of clarity I will classify answers given to the variables of interest as "low" or "high". I will provide boxplots for the grouped variables and also scatterplots for the original unclassified values of the variables. I will use sex to label/group observations on the plots.
+
+  
+```{r echo = T, fig.height=6, fig.width=9 }
+
+repeter <- function(var_name){
+  alc$new <- as.numeric(cut_number(var_name,2))
+  factor(alc$new, labels = c("low", "high"))
+}
+
+# change variable name and parameter to create factor levels
+alc$goout_group <- repeter(alc$goout)
+alc$abs_group <- repeter(alc$absences)
+alc$famrel_group <- repeter(alc$famrel)
+alc$health_group <- repeter(alc$health)
+
+plotData <- alc %>%
+  select(goout_group, abs_group, famrel_group, health_group, sex, alc_use)
+plotData2 <- alc %>%
+  select(goout, absences, famrel, health, sex, alc_use)
+
+plotData %>%
+  gather(-alc_use, -sex, key = "var", value = "value") %>% 
+  ggplot(aes(x = value, y = alc_use, color = sex)) +
+  geom_boxplot() +
+  facet_wrap(~ var, scales = "free") + ylab("Alchol Consumption") + xlab(" ") + ggtitle("Alcohol Consumption by 4 Variables")
+
+plotData2 %>%
+  gather(-alc_use, -sex, key = "var", value = "value") %>% 
+  ggplot(aes(x = value, y = alc_use, color = sex)) +
+  geom_point(position = "jitter") +
+  facet_wrap(~ var, scales = "free") + ylab("Alchol Consumption") + xlab(" ") + ggtitle("Alcohol Consumption by 4 Variables")
+
+#summarising the data
+alc %>% group_by(sex, high_use) %>% summarise(count = n(), mean_age = mean(age), mean_absences = mean(absences),
+                                              mean_health = mean(health), mean_goout = mean(goout),
+                                              mean_famrel = mean(famrel), mean_grade = mean(G3))
+
+
+```
+  
+  
+From the plots we can see that gender was important in predicting alcohol usage. Men drink more and this is visible in all plots where as females do not seem to be affected by the effect of different variables. Regarding our hypotheses we can see that health does not sem to have a strong relation to alcohol consumption, but other variables do have. Low family relations make men drink more. High value of going out is strongly connected to increased alcohol consumption in men. Those students who are absent from class tend to also drink more. From the summary table we can see numerical data between high_use variable and other interesting variables.
+
+Now we can do the logistic regression for `high_use` variable.
+  
+
+```{r echo = T, warning= F, message= F}
+
+#logistic regression
+
+m <- glm(high_use ~ absences + famrel + goout + health, data = alc, family = "binomial")
+summary(m)
+coef(m)
+
+OR <- coef(m) %>% exp
+CI <- confint(m) %>% exp
+cbind(OR, CI)
+
+probabilities <- predict(m, type = "response")
+alc <- alc %>%
+  mutate(probability = probabilities) %>%
+  mutate(prediction = probability > 0.5)
+
+# tabulate the target variable versus the predictions
+table(high_use = alc$high_use, prediction =  alc$prediction)
+
+
+g <- ggplot(alc, aes(x = probability, y = high_use, col = prediction))
+g + geom_point(position = "jitter")
+# tabulate the target variable versus the predictions
+table(high_use = alc$high_use, prediction = alc$prediction) %>% prop.table() %>% addmargins
+
+
+# define a loss function (mean prediction error)
+loss_func <- function(class, prob) {
+  n_wrong <- abs(class - prob) > 0.5
+  mean(n_wrong)
+}
+
+# call loss_func to compute the average number of wrong predictions in the (training) data
+loss_func(class = alc$high_use, prob = alc$probability)
+
+```
+  
+As we interpret the output we can see that the estimate for the health-variable's coefficient ranges from 0.9932 ta 1.4258 (95% confidence interval). This means that the coefficient can be either negative (reduces the odds of being high_use) or it can be positive, therefore the variable coefficient is not statistically signifficant. Family relations has a negative relationship with high_use, but the rest have a postive relationship. 
+
+After this I calculated the crosstabulation and there we can see the number of misclassifications and rightly classified instances. After that I defined the loss function and calculated the prediction error (using the whole data as a training set). Model's training error is 0.238 and thus model accuracy is then 76.2%. This is signifficantly better than random classifier which is on average 50% right at the time. 
+  
+
+Finally, this is the **BONUS** task. One was supposed to try to find a better model and use 10-fold cross validation.
+  
+```{r echo = T}
+#health does not affect statistically so we will replace it with sex
+m <- glm(high_use ~ absences + famrel + goout + sex, data = alc, family = "binomial")
+summary(m)
+
+#cross-validation
+library(boot)
+cv <- alc %>%
+  cv.glm(cost = loss_func, glmfit = m, K = 10)
+# average number of wrong predictions in the cross validation
+cv$delta[1]
+
+```
+
+Here we can see clearly that the test set performance is much better than DataCamp's model which had about 0.26 error.
+
