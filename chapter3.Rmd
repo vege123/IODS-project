@@ -153,7 +153,7 @@ alc %>% group_by(sex, high_use) %>% summarise(count = n(), mean_age = mean(age),
 
 ```
   
-  
+
 From the plots we can see that gender was important in predicting alcohol usage. Men drink more and this is visible in all plots where as females do not seem to be affected by the effect of different variables. Regarding our hypotheses we can see that health does not sem to have a strong relation to alcohol consumption, but other variables do have. Low family relations make men drink more. High value of going out is strongly connected to increased alcohol consumption in men. Those students who are absent from class tend to also drink more. From the summary table we can see numerical data between high_use variable and other interesting variables.
 
 Now we can do the logistic regression for `high_use` variable.
@@ -197,11 +197,11 @@ loss_func(class = alc$high_use, prob = alc$probability)
 
 ```
   
+
 As we interpret the output we can see that the estimate for the health-variable's coefficient ranges from 0.9932 ta 1.4258 (95% confidence interval). This means that the coefficient can be either negative (reduces the odds of being high_use) or it can be positive, therefore the variable coefficient is not statistically signifficant. Family relations has a negative relationship with high_use, but the rest have a postive relationship. 
 
 After this I calculated the crosstabulation and there we can see the number of misclassifications and rightly classified instances. After that I defined the loss function and calculated the prediction error (using the whole data as a training set). Model's training error is 0.238 and thus model accuracy is then 76.2%. This is signifficantly better than random classifier which is on average 50% right at the time. 
   
-
 Finally, this is the **BONUS** task. One was supposed to try to find a better model and use 10-fold cross validation.
   
 ```{r echo = T}
@@ -220,3 +220,4 @@ cv$delta[1]
 
 Here we can see clearly that the test set performance is much better than DataCamp's model which had about 0.26 error.
 
+  
