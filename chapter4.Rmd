@@ -1,0 +1,318 @@
+---
+output:
+  html_document: default
+---
+# 4. Clustering and classification {.tabset .tabset-fade .tabset-pills}
+
+## Analysis
+
+In this week's exercise we will look at clustering and classification with the Boston dataset from the MASS library. Let's begin by importing the data.
+
+```{r echo = T, message = F, warning = F}
+initsetup <- function(k){
+  setwd(k)
+  library(Matrix)
+  library(ggplot2)
+  library(dplyr)
+  library(MASS)
+  library(GGally)
+}
+initsetup("/Users/veikko/Desktop/datakurssi/IODS-project/data")
+getwd()
+rm(list=ls())
+
+data("Boston")
+
+# summaries of the data
+str(Boston)
+summary(Boston)
+```
+
+  
+Here is the list of variables in the dataset:
+
+1. crim -- per capita crime rate by town.
+2. zn -- proportion of residential land zoned for lots over 25,000 sq.ft.
+3. indus -- proportion of non-retail business acres per town.
+4. chas -- Charles River dummy variable (= 1 if tract bounds river; 0 otherwise).
+5. nox -- nitrogen oxides concentration (parts per 10 million).
+6. rm -- average number of rooms per dwelling.
+7. age -- proportion of owner-occupied units built prior to 1940.
+8. dis -- weighted mean of distances to five Boston employment centres.
+9. rad -- index of accessibility to radial highways.
+10. tax -- full-value property-tax rate per \$10,000.
+11. ptratio -- pupil-teacher ratio by town.
+12. black -- 1000(Bk - 0.63)^2 where Bk is the proportion of blacks by town.
+13. lstat -- lower status of the population (percent).
+14. medv -- median value of owner-occupied homes in \$1000s.
+
+  
+Summary and str functions revealed that we have one categorical variable (chas) and one discrete variable (rad). black, crim and zn have very large differences in max and min values, but 1st to 3rd quarter they seem to have belieavable values. One can also note that all variables are in different scales. 
+
+Let's explore the distributions and correlations of different variables in the data set by using `ggpairs` function. 
+
+  
+```{r echo = T, message = F, warning = F, fig.height=12, fig.width=12}
+# there are at least two categorical variables in the data
+B1 <- Boston
+B1$rad <-  as.factor(Boston$rad)
+B1$chas <- as.factor(ifelse(Boston$chas==1, "river", "land"))
+
+# custom ggpairs from https://github.com/ggobi/ggally/issues/139
+library(RColorBrewer)
+corColors <- RColorBrewer::brewer.pal(n = 7, name = "RdYlGn")[2:6]
+corColors
+
+my_custom_cor_color <- function(data, mapping, color = I("black"), sizeRange = c(1, 5), ...) {
+  
+  # get the x and y data to use the other code
+  x <- eval(mapping$x, data)
+  y <- eval(mapping$y, data)
+  
+  ct <- cor.test(x,y)
+
+  r <- unname(ct$estimate)
+  rt <- format(r, digits=2)[1]
+  tt <- as.character(rt)
+  
+  # plot the cor value
+  p <- ggally_text(
+    label = tt, 
+    mapping = aes(),
+    xP = 0.5, yP = 0.5, 
+    size = 6,
+    color=color,
+    ...
+  ) +
+    
+    theme(
+      panel.background=element_rect(fill="white", color = "black"),
+      panel.grid.minor=element_blank(),
+      panel.grid.major=element_blank()
+    ) 
+  
+  corColors <- RColorBrewer::brewer.pal(n = 7, name = "RdYlGn")[2:6]
+  
+  if (r <= -0.8) {
+    corCol <- corColors[1]
+  } else if (r <= -0.6) {
+    corCol <- corColors[2]
+  } else if (r < 0.6) {
+    corCol <- corColors[3]
+  } else if (r < 0.8) {
+    corCol <- corColors[4]
+  } else {
+    corCol <- corColors[5]
+  }
+  p <- p + theme(
+    panel.background = element_rect(fill= corCol)
+  )
+  p
+}
+
+
+ggpairs(
+  B1,
+  columns = 1:14,
+  upper = list(continuous = my_custom_cor_color),
+  diag = list(combo = "facethist"),
+  lower = list(
+    combo = wrap("facethist", bins = 100)
+  )
+)
+```
+
+  
+Here we can see correlations much easier than with basic `ggpairs` settings. With the basic settings there are just so many variables which makes the plot difficult to interpret without any color coding. Here one has to remember that I did not test the correlations with statistical signifficance. 
+
+Some insights from the ggpairs:
+
+if we look at the `medv` variable, which indicates median value of appartmens, we can see that it correlates very negatively with `crime` and `lstat`. This means that more valuable the appartment the less crime and social classes there are. One can also see that `age` and `lstat` correlate positively with each other which means that lower social status is connected with older buildings in the neighbourhood. There is also very strong positive correlation between `tax`and `indus`. This indicates high property tax yields are present in areas with high levels of industrial activity.
+
+  
+```{r echo = T, message = F, warning = F}
+# x-mean(x) / sd(x)
+boston_scaled <- scale(Boston)
+summary(boston_scaled)
+class(boston_scaled)
+
+boston_scaled <- as.data.frame(boston_scaled)
+
+# creating a factor variable
+scaled_crim <- boston_scaled[, "crim"]
+summary(scaled_crim)
+
+# bins <- quantile(scaled_crim)
+
+crime <- as.numeric(cut_number(scaled_crim,4)) %>%
+  factor(labels = c("low", "med_low", "med_high", "high"))
+table(crime)
+
+# remove old and add new
+boston_scaled <- dplyr::select(boston_scaled, -crim)
+boston_scaled <- data.frame(boston_scaled, crime)
+```
+
+  
+Above I did many things: 
+1. scaled all variables in Boston dataset (note that all variables need to be numerical)
+2. summarized new scaled dataset 
+3. conversed scaled data back to a data frame
+4. then I cut the scaled_crim quantiles and created a new factor variable `crime`
+5. finally, I removed old numeric variable and replaced it with the categorical variable 
+
+As we can see, the variables are now all scaled, meaning for each value: $(x -mean(x))/sd(x)$ 
+Variables now obtain negative values as their min values till mean gets the value of zero and after mean value all values are positive.
+
+Next, I will divide the data into a training set and a test set, so that 80% of the datapoints will be in the training set. I 'll also remove the real values of `crime` variable from the test set into another variable of its own called `correct_classes`.
+
+  
+```{r echo = T, message = F, warning = F}
+# creating training and test set
+set.seed(12)
+ind <- nrow(boston_scaled) %>%
+  sample(. * 0.8)
+
+train <- boston_scaled[ind,]
+test <- boston_scaled[-ind,]
+
+correct_classes <- test[, "crime"]
+# test set ready for prediction
+test <- dplyr::select(test, -crime)
+
+```
+
+  
+Now we turn into performing linear discriminant analysis fitting on the training set. We will also visualize the results.
+
+  
+```{r echo = T, message = F, warning = F}
+# fitting the model on the training set
+lda.fit <- lda(crime ~. , data = train)
+lda.fit
+
+lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0.75, choices = c(1,2)){
+  heads <- coef(x)
+  arrows(x0 = 0, y0 = 0, 
+         x1 = myscale * heads[,choices[1]], 
+         y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+  text(myscale * heads[,choices], labels = row.names(heads), 
+       cex = tex, col=color, pos=3)
+}
+
+# target classes as numeric
+classes <- as.numeric(train$crime)
+plot(lda.fit, dimen = 2, col = classes, pch = classes)
+lda.arrows(lda.fit, myscale = 3)
+
+```
+
+  
+Here we perform the prediction with the trained LDA model. Then we will cross tabulate the classes of the prediction versus correct classes. 
+
+  
+```{r echo = T, message = F, warning = F}
+lda.pred <- predict(lda.fit, newdata = test)
+table(correct = correct_classes, predicted = lda.pred$class)
+
+```
+
+As we can see, our LDA prediction was good at predicting extreme values, i.e. high and low crime having not that many values out of the diagonal, as there are only one misclassification in high class and three in low class. med_low and med_high had more issues in determining the correct classes.
+
+  
+Let's perform K-means clustering algorithm on the dataset. For this procedure we need to calculate distances between observations and the dataset needs to be scaled to get comparable results. Then we shall determine the optimal number of clusters, by visually looking at distance measures with different `k`. After that we visualize the dataset by coloring the observations by their cluster.
+
+  
+```{r echo = T, message = F, warning = F}
+data('Boston')
+B2 <- scale(Boston)
+B2 <- as.data.frame(B2)
+
+dist_eu <- dist(B2, method = "euclidean")
+summary(dist_eu)
+dist_man <- dist(B2, method = "manhattan")
+summary(dist_man)
+
+# let's determine the optimal number of clusters
+k_max <- 10
+twcss <- sapply(1:k_max, function(k){kmeans(dist_eu, k)$tot.withinss})
+plot(1:k_max, twcss, type='b')
+```
+
+  
+We can clearly see that the greatest drop in the plot happens with k=2. So, we choose k=2 to be the optimal number of clusters.
+
+  
+```{r echo = T, message = F, warning = F, fig.height=12, fig.width=12}
+# creating plots to interpret results
+km <-kmeans(dist_eu, centers = 2)
+asd <- as.data.frame(km$cluster) %>%
+  .[, 1] %>%
+  as.factor(.)
+
+Boston["clusters"] <- asd
+ggpairs(Boston, mapping = aes(col = clusters, alpha = 0.3), columns = 1:14, 
+              lower = list(combo = wrap("facethist", bins = 100)))
+
+# histograms
+library(reshape2)
+d <- melt(Boston[,-c(4)])
+ggplot(d,aes(x = value, fill=clusters)) + 
+  facet_wrap(~variable,scales = "free_x") + 
+  geom_histogram()
+```
+
+  
+It seems that crime low crime is almost always classified as blue and high crime red against all variables. We can see that in some dimensions classes are somewhat mixed, but in some there is a clear division between classes. 
+
+Next, we can move onto the first **BONUS** task. 
+
+  
+```{r echo = T, message = F, warning = F}
+# dist_eu is calculated from scaled Boston dataset called B2
+km <-kmeans(dist_eu, centers = 4)
+asd <- as.data.frame(km$cluster) %>%
+  .[, 1] %>%
+  as.factor(.)
+
+B2["clusters"] <- asd
+
+lda.fit2 <- lda(clusters ~., data = B2)
+lda.fit2
+# target classes as numeric
+classes <- as.numeric(B2$clusters)
+plot(lda.fit2, dimen = 2, col = classes, pch = classes)
+lda.arrows(lda.fit2, myscale = 6)
+
+```
+
+This looks interesting. The biplot shows us which variables are dragging the observations into certain clusters. For instance `crime`, `nox`, `medw` variables are pulling the observation towards class 2, `rad` towards class 3, `black` towards class 1.
+
+  
+Finally, let's have a try at the **Super-Bonus** task.
+
+
+```{r echo = T, message = F, warning = F}
+# super bonus
+model_predictors <- dplyr::select(train, -crime)
+dim(model_predictors)
+dim(lda.fit$scaling)
+
+matrix_product <- as.matrix(model_predictors) %*% lda.fit$scaling
+matrix_product <- as.data.frame(matrix_product)
+
+library(plotly)
+plot_ly(x = matrix_product$LD1, y = matrix_product$LD2, 
+        z = matrix_product$LD3, type= 'scatter3d', mode='markers', color = train$crime)
+
+plot_ly(x = matrix_product$LD1, y = matrix_product$LD2, 
+        z = matrix_product$LD3, type= 'scatter3d', mode='markers', color = Boston$clusters[ind])
+
+```
+
+The two plots have similarities in terms of their grouping of observations. It seems that high and med_high are clustered together as class 1 and low and med_low as class 2. There are some misclassifications (as earlier seen in cross tabulation), but this visualizes very nicely, how to spot individual misclassifications. 
+
+
+
+
+
