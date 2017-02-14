@@ -203,7 +203,7 @@ lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0
 # target classes as numeric
 classes <- as.numeric(train$crime)
 plot(lda.fit, dimen = 2, col = classes, pch = classes)
-lda.arrows(lda.fit, myscale = 3)
+lda.arrows(lda.fit, myscale = 2)
 
 ```
 
